@@ -208,7 +208,7 @@ def main():
         diff_minutes = (event_dt - now).total_seconds() / 60.0
         event_key = f"{date_str}_{start_time_str}_{title}_1h"
 
-        if 30.0 <= diff_minutes <= 75.0:
+        if 0.0 < diff_minutes <= 75.0:
             if event_key not in history:
                 is_tutor = ("學生" in title or "家教" in title)
                 notif_title = "🔔 家教上課提醒" if is_tutor else "🔔 行程提醒"
