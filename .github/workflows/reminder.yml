@@ -1,11 +1,13 @@
 name: Cloud Reminder (LINE & Email)
 
 on:
+  repository_dispatch:
+    types: [reminder_trigger]
   push:
     branches:
       - main
   schedule:
-    # Run every 20 minutes (UTC)
+    # Run every 20 minutes (UTC) as backup
     - cron: '*/20 * * * *'
   workflow_dispatch:
 
