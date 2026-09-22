@@ -1,0 +1,41 @@
+name: Cloud Reminder (LINE & Email)
+
+on:
+  schedule:
+    # Run every 20 minutes (UTC)
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Cloud Reminder
+        env:
+          CALENDAR_PASS: ${{ secrets.CALENDAR_PASS }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_RECIPIENT: ${{ secrets.GMAIL_RECIPIENT }}
+        run: |
+          python cloud_reminder.py
+
+      - name: Commit and push reminder history
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          if [ -f reminder_history.json ]; then
+            git add reminder_history.json
+            git diff --quiet && git diff --staged --quiet || (git commit -m "Update reminder history [skip ci]" && git push)
+          fi
