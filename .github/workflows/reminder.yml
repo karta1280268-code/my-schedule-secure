@@ -1,6 +1,9 @@
 name: Cloud Reminder (LINE & Email)
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Run every 20 minutes (UTC)
     - cron: '*/20 * * * *'
