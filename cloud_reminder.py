@@ -187,11 +187,12 @@ def main():
             updated = True
             print(f"Sent 22:00 preview for {tomorrow_date_str}")
 
-    # 3. 課前 1 小時提醒 (寬裕時間窗口 30 ~ 75 分鐘)
+    # 3. 行程提醒：支援自訂提醒時間 (remind_at) 或 預設課前 1 小時提醒
     for e in events:
         date_str = e.get("date", "")
         time_str = e.get("time", "")
         title = e.get("title", "")
+        remind_at = e.get("remind_at")
 
         if not date_str or not time_str or "全天" in time_str:
             continue
@@ -205,22 +206,53 @@ def main():
         except ValueError:
             continue
 
-        diff_minutes = (event_dt - now).total_seconds() / 60.0
-        event_key = f"{date_str}_{start_time_str}_{title}_1h"
+        is_tutor = ("學生" in title or "家教" in title)
 
-        if 0.0 < diff_minutes <= 75.0:
-            if event_key not in history:
-                is_tutor = ("學生" in title or "家教" in title)
-                notif_title = "🔔 家教上課提醒" if is_tutor else "🔔 行程提醒"
-                email_body = f"您好，\n\n您的行程「{title}」將於一小時後（{start_time_str}）開始，請記得準時上課！\n\n- 家教提醒系統自動發送"
-                line_msg = f"🔔 上課提醒\n\n還有 1 小時！（{start_time_str}）\n「{title}」即將開始，請記得準時上課！"
+        # 3-A. 自訂提醒時間 (remind_at)
+        if remind_at:
+            try:
+                remind_dt_naive = datetime.datetime.strptime(f"{date_str} {remind_at}", "%Y-%m-%d %H:%M")
+                remind_dt = remind_dt_naive.replace(tzinfo=tz)
+                remind_diff = (now - remind_dt).total_seconds() / 60.0
+                remind_key = f"{date_str}_{remind_at}_{title}_custom"
 
-                send_email(notif_title, email_body)
-                send_line(line_msg)
+                # 在提醒時間前後窗口內觸發 (-2 分鐘 ~ +25 分鐘，相容 cron-job 10 分鐘間隔)
+                if -2.0 <= remind_diff <= 25.0 and remind_key not in history:
+                    note_custom = e.get("remind_note", f"「{title}」預定於 {start_time_str} 開始，請做好準備！")
+                    notif_title = f"🔔 行程出發提醒：{title}" if not is_tutor else f"🔔 家教提醒：{title}"
+                    line_msg = f"🔔 行程出發提醒\n\n⏰ 提醒時間：{remind_at}\n\n🚆 行程：「{title}」\n⏱️ 開始／發車時間：{start_time_str}\n\n💡 溫馨提醒：{note_custom}"
+                    email_body = f"您好，\n\n您設定的提醒時間（{remind_at}）已到！\n\n行程：「{title}」\n時間：{start_time_str}\n備註：{note_custom}\n\n- 專屬行事曆系統自動發送"
 
-                history[event_key] = now.isoformat()
-                updated = True
-                print(f"Sent 1-hour alert for {title} at {start_time_str}")
+                    send_email(notif_title, email_body)
+                    send_line(line_msg)
+
+                    history[remind_key] = now.isoformat()
+                    updated = True
+                    print(f"Sent custom alert for {title} scheduled at {remind_at}")
+            except Exception as ex:
+                print(f"Error processing custom remind_at for {title}: {ex}")
+
+        # 3-B. 預設 1 小時前提醒 (若未指定自訂 remind_at)
+        else:
+            diff_minutes = (event_dt - now).total_seconds() / 60.0
+            event_key = f"{date_str}_{start_time_str}_{title}_1h"
+
+            if 0.0 < diff_minutes <= 75.0:
+                if event_key not in history:
+                    notif_title = "🔔 家教上課提醒" if is_tutor else "🔔 行程提醒"
+                    if is_tutor:
+                        email_body = f"您好，\n\n您的行程「{title}」將於一小時後（{start_time_str}）開始，請記得準時上課！\n\n- 家教提醒系統自動發送"
+                        line_msg = f"🔔 上課提醒\n\n還有 1 小時！（{start_time_str}）\n「{title}」即將開始，請記得準時上課！"
+                    else:
+                        email_body = f"您好，\n\n您的行程「{title}」將於一小時後（{start_time_str}）開始，請做好準備！\n\n- 專屬行事曆系統自動發送"
+                        line_msg = f"🔔 行程提醒\n\n「{title}」將於 {start_time_str} 開始，請做好準備！"
+
+                    send_email(notif_title, email_body)
+                    send_line(line_msg)
+
+                    history[event_key] = now.isoformat()
+                    updated = True
+                    print(f"Sent 1-hour alert for {title} at {start_time_str}")
 
     # Prune history entries older than 7 days
     cutoff = (now - datetime.timedelta(days=7)).isoformat()
