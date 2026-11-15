@@ -144,7 +144,10 @@ def format_summary_message(date_str, events, notes_dict, is_tomorrow=False):
     if target_notes:
         msg += "\n💡 貼心備忘：\n"
         for n in target_notes:
-            msg += f"• {n}\n"
+            if isinstance(n, dict):
+                msg += f"• {n.get('summary', n.get('content', ''))}\n"
+            else:
+                msg += f"• {n}\n"
 
     msg += "━━━━━━━━━━━━━━━\n"
     if is_tomorrow:
@@ -297,6 +300,45 @@ def main():
                         print(f"Sent custom alert for {item['title']} scheduled at {remind_at}")
                 except Exception as ex:
                     print(f"Error processing custom remind_at for {item['title']}: {ex}")
+
+    # 4. 獨立定時備忘推播 (Custom Timed Notes / Alerts from notes.json)
+    today_notes = notes.get(now_date_str, [])
+    for idx, item in enumerate(today_notes):
+        n_time = None
+        n_title = "特別提醒"
+        n_content = ""
+        if isinstance(item, dict):
+            n_time = item.get("time")
+            n_title = item.get("title", "特別提醒")
+            n_content = item.get("content", item.get("message", ""))
+        elif isinstance(item, str):
+            import re
+            m = re.match(r"^(\d{1,2}:\d{2})\s*(.*)", item.strip())
+            if m:
+                n_time = m.group(1)
+                if len(n_time) == 4:
+                    n_time = f"0{n_time}"
+                n_content = m.group(2)
+                n_title = "特別提醒"
+
+        if n_time:
+            try:
+                remind_dt = datetime.datetime.strptime(f"{now_date_str} {n_time}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+                remind_diff = (now - remind_dt).total_seconds() / 60.0
+                note_key = f"{now_date_str}_{n_time}_{idx}_note_custom"
+
+                if -2.0 <= remind_diff <= 25.0 and note_key not in history:
+                    line_msg = f"{n_content}"
+                    email_body = f"老師您好，\n\n您設定的定時提醒（{n_time}）已到！\n\n【{n_title}】\n{n_content}\n\n- 專屬雲端提醒系統自動發送"
+
+                    send_email(f"🔔 {n_title} ({n_time})", email_body)
+                    send_line(line_msg)
+
+                    history[note_key] = now.isoformat()
+                    updated = True
+                    print(f"Sent custom timed note alert for [{n_title}] at {n_time}")
+            except Exception as ex:
+                print(f"Error processing custom note alert for {item}: {ex}")
 
     # Prune history entries older than 7 days
     cutoff = (now - datetime.timedelta(days=7)).isoformat()

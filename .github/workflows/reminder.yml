@@ -7,8 +7,8 @@ on:
     branches:
       - main
   schedule:
-    # Run every 20 minutes (UTC) as backup
-    - cron: '*/20 * * * *'
+    # Run every 10 minutes (UTC) for precision timing
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 permissions:
