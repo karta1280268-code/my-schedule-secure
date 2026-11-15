@@ -2,6 +2,8 @@
 import os
 import sys
 import json
+import re
+import hashlib
 import datetime
 import subprocess
 import urllib.request
@@ -303,29 +305,30 @@ def main():
 
     # 4. 獨立定時備忘推播 (Custom Timed Notes / Alerts from notes.json)
     today_notes = notes.get(now_date_str, [])
-    for idx, item in enumerate(today_notes):
+    for item in today_notes:
         n_time = None
         n_title = "特別提醒"
         n_content = ""
         if isinstance(item, dict):
-            n_time = item.get("time")
+            n_time = (item.get("time") or "").strip()
             n_title = item.get("title", "特別提醒")
             n_content = item.get("content", item.get("message", ""))
         elif isinstance(item, str):
-            import re
             m = re.match(r"^(\d{1,2}:\d{2})\s*(.*)", item.strip())
             if m:
                 n_time = m.group(1)
-                if len(n_time) == 4:
-                    n_time = f"0{n_time}"
                 n_content = m.group(2)
                 n_title = "特別提醒"
+
+        if n_time and len(n_time) == 4 and n_time[1] == ":":
+            n_time = f"0{n_time}"
 
         if n_time:
             try:
                 remind_dt = datetime.datetime.strptime(f"{now_date_str} {n_time}", "%Y-%m-%d %H:%M").replace(tzinfo=tz)
                 remind_diff = (now - remind_dt).total_seconds() / 60.0
-                note_key = f"{now_date_str}_{n_time}_{idx}_note_custom"
+                digest = hashlib.sha256(f"{n_title}|{n_content}".encode("utf-8")).hexdigest()[:10]
+                note_key = f"{now_date_str}_{n_time}_{digest}_note_custom"
 
                 if -2.0 <= remind_diff <= 25.0 and note_key not in history:
                     line_msg = f"{n_content}"
